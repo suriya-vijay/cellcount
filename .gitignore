@@ -7,5 +7,5 @@ frontend/.env
 .env
 # Local lab images — kept out of the public repo (bring your own to test)
 samples/
-# Per-machine Claude Code settings (machine-specific paths/permissions)
-.claude/settings.local.json
+# Claude Code project settings (machine/workflow-specific, not part of the app)
+.claude/
