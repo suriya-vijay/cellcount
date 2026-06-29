@@ -16,11 +16,10 @@ Pipeline (crop -> list of cells):
   2. preprocess: grayscale -> CLAHE -> blur
   3a. LIVE pass: white top-hat -> threshold -> open (kill grid lines) -> contours
   3b. DEAD pass: blue-excess & dark mask -> open -> contours
-  4. filter each contour by area + circularity; classify by which pass found it
-  5. optional watershed to split touching/clumped cells (live pass)
-  6. de-duplicate (a blob found by both passes counts once, preferring dead)
-  7. border rule: exclude cells touching the BOTTOM or RIGHT crop edge
-  8. map centers back to normalized full-image coordinates
+  4. filter each contour by area + circularity + shape; classify by pass
+  5. de-duplicate (a blob found by both passes counts once, preferring dead)
+  6. border rule: exclude cells touching the BOTTOM or RIGHT crop edge
+  7. map centers back to normalized full-image coordinates
 """
 
 from __future__ import annotations
@@ -151,8 +150,6 @@ def _detect_live(gray: np.ndarray, params: dict) -> tuple[list[np.ndarray], int]
     _, binary = cv2.threshold(tophat, thresh, 255, cv2.THRESH_BINARY)
     binary = _suppress_lines(binary, params)
 
-    if params["use_watershed"]:
-        return _watershed_contours(binary, params), thresh
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     return list(contours), thresh
 
@@ -218,32 +215,6 @@ def _suppress_lines(binary: np.ndarray, params: dict) -> np.ndarray:
         return binary
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     return cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
-
-
-# --------------------------------------------------------------------------- #
-# Step 5: watershed (optional, live pass)
-# --------------------------------------------------------------------------- #
-def _watershed_contours(binary: np.ndarray, params: dict) -> list[np.ndarray]:
-    dist = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
-    if dist.max() <= 0:
-        return []
-    _, seeds = cv2.threshold(dist, params["dist_factor"] * dist.max(), 255, 0)
-    seeds = np.uint8(seeds)
-    n_labels, markers = cv2.connectedComponents(seeds)
-    if n_labels <= 1:
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        return list(contours)
-    markers = markers + 1
-    unknown = cv2.subtract(binary, seeds)
-    markers[unknown == 255] = 0
-    color = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
-    markers = cv2.watershed(color, markers)
-    contours: list[np.ndarray] = []
-    for label in range(2, n_labels + 1):
-        region = np.uint8(markers == label) * 255
-        found, _ = cv2.findContours(region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contours.extend(found)
-    return contours
 
 
 # --------------------------------------------------------------------------- #

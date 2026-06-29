@@ -26,12 +26,16 @@ _SPEC: dict[str, tuple[float, float, float]] = {
     # it is clamped to so a near-empty crop can't go wildly permissive.
     "auto_bright_floor": (12, 0, 60),
     # --- size + shape filtering (applies to both live and dead) ---
+    # Defaults are deliberately loose ("overdetect"): catch touching/merged and
+    # slightly-irregular cells, accepting a few grid/debris false marks that the
+    # user can tighten via the sliders. Tighten min_circularity / lower max_radius
+    # to reduce false positives.
     "min_radius": (2, 1, 100),
-    "max_radius": (9, 2, 200),
-    "min_circularity": (0.55, 0.0, 1.0),
+    "max_radius": (14, 2, 200),
+    "min_circularity": (0.35, 0.0, 1.0),
     # Shape gates that reject grid-line fragments circularity misses.
-    "max_aspect": (2.2, 1.0, 6.0),    # reject blobs longer/thinner than this
-    "min_extent": (0.42, 0.0, 1.0),   # reject blobs filling < this fraction of their box
+    "max_aspect": (3.0, 1.0, 6.0),    # reject blobs longer/thinner than this
+    "min_extent": (0.32, 0.0, 1.0),   # reject blobs filling < this fraction of their box
     # --- preprocessing ---
     "blur_kernel": (3, 1, 15),        # odd; 1 disables blur
     "clahe_clip": (2.0, 0.0, 10.0),
@@ -41,13 +45,10 @@ _SPEC: dict[str, tuple[float, float, float]] = {
     "blue_excess": (18, 0, 150),      # how much B must exceed R/G mean to be "blue"
     "v_dead_max": (170, 0, 255),      # dead cells are darker than this
     "sat_min": (40, 0, 255),          # min saturation to count as stained
-    # --- clump splitting ---
-    "dist_factor": (0.5, 0.1, 0.95),
 }
 
 _BOOL_DEFAULTS: dict[str, bool] = {
     "auto_bright": True,              # auto-pick brightness threshold (Otsu) per image
-    "use_watershed": False,
     "detect_dead": True,              # run the blue dead-cell pass
 }
 
