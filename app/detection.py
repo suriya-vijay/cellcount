@@ -47,12 +47,18 @@ def detect_cells(image_bytes: bytes, box: dict, raw_params: dict | None) -> dict
 
     gray = _preprocess(crop, params)
 
-    live_contours, bright_used = _detect_live(gray, params)
+    live_contours, bright_used, tophat = _detect_live(gray, params)
     dead_contours = (
         _detect_dead(crop, params)
         if params["detect_dead"] and _has_blue_signal(crop, params)
         else []
     )
+
+    # Reject dim/empty live detections: a real cell has a bright core, so its mean
+    # top-hat response must clear a multiple of the detection threshold. Relative to
+    # bright_used so it adapts per image under auto-brightness. Dead cells are dark by
+    # nature, so this filter is applied to the live pass only.
+    min_core = params["min_core_factor"] * bright_used
 
     # Build candidate cells (crop-local), tagged by pass.
     candidates: list[dict] = []
@@ -63,7 +69,7 @@ def detect_cells(image_bytes: bytes, box: dict, raw_params: dict | None) -> dict
             candidates.append(cell)
     for c in live_contours:
         cell = _measure(c, cw, ch, params)
-        if cell:
+        if cell and _core_brightness(c, tophat) >= min_core:
             cell["type"] = "live"
             candidates.append(cell)
 
@@ -135,8 +141,8 @@ def _preprocess(crop: np.ndarray, params: dict) -> np.ndarray:
 # --------------------------------------------------------------------------- #
 # Step 3a: LIVE pass (bright top-hat)
 # --------------------------------------------------------------------------- #
-def _detect_live(gray: np.ndarray, params: dict) -> tuple[list[np.ndarray], int]:
-    """Return (contours, brightness_threshold_used)."""
+def _detect_live(gray: np.ndarray, params: dict) -> tuple[list[np.ndarray], int, np.ndarray]:
+    """Return (contours, brightness_threshold_used, tophat)."""
     size = params["tophat_size"]
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
     tophat = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
@@ -151,7 +157,15 @@ def _detect_live(gray: np.ndarray, params: dict) -> tuple[list[np.ndarray], int]
     binary = _suppress_lines(binary, params)
 
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    return list(contours), thresh
+    return list(contours), thresh, tophat
+
+
+def _core_brightness(contour: np.ndarray, tophat: np.ndarray) -> float:
+    """Mean top-hat response inside a blob — a real cell's bright core scores high,
+    a dim/empty false detection scores low (just above the detection threshold)."""
+    mask = np.zeros(tophat.shape[:2], dtype=np.uint8)
+    cv2.drawContours(mask, [contour], -1, 255, thickness=-1)
+    return cv2.mean(tophat, mask=mask)[0]
 
 
 def _auto_bright_threshold(tophat: np.ndarray, floor: int, fallback: int) -> int:

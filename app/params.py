@@ -36,6 +36,9 @@ _SPEC: dict[str, tuple[float, float, float]] = {
     # Shape gates that reject grid-line fragments circularity misses.
     "max_aspect": (3.0, 1.0, 6.0),    # reject blobs longer/thinner than this
     "min_extent": (0.32, 0.0, 1.0),   # reject blobs filling < this fraction of their box
+    # Reject dim/empty live detections: a blob's mean top-hat core must be at least
+    # this multiple of the detection threshold. 1.0 = off; higher = stricter.
+    "min_core_factor": (1.3, 1.0, 4.0),
     # --- preprocessing ---
     "blur_kernel": (3, 1, 15),        # odd; 1 disables blur
     "clahe_clip": (2.0, 0.0, 10.0),
