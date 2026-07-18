@@ -1,6 +1,8 @@
 // Thin client for the FastAPI detection backend.
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+// Empty string = same origin as the page (works when FastAPI serves the built UI).
+// For the two-server dev flow, set VITE_API_BASE=http://localhost:8000 in frontend/.env.
+const BASE = import.meta.env.VITE_API_BASE ?? "";
 
 // Slider definitions: must stay consistent with backend app/params.py.
 // Each: key, label, min, max, step, default. Booleans use type:"toggle".

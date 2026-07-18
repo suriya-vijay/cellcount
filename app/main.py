@@ -13,9 +13,11 @@ Endpoints:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .detection import DetectionError, detect_cells
 from .schemas import Box, DetectResponse
@@ -71,3 +73,12 @@ async def detect(
         raise HTTPException(status_code=500, detail=f"detection failed: {exc}")
 
     return DetectResponse(**result)
+
+
+# --- Serve the built React app (single-command / single-server mode) --------- #
+# Mounted LAST so /health and /detect above take precedence. Everything else is
+# served from frontend/dist (build it with `cd frontend && npm run build`). The
+# existence guard keeps the API runnable before the UI has been built.
+_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _DIST.exists():
+    app.mount("/", StaticFiles(directory=_DIST, html=True), name="app")

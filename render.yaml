@@ -1,0 +1,17 @@
+# Single-service deploy for CellCount on Render (https://render.com).
+# One web service runs both the OpenCV backend and the built React UI.
+# Not activated automatically — connect this repo in the Render dashboard,
+# or use "Blueprints" to pick up this file. See README "Deploy" section.
+
+services:
+  - type: web
+    name: cellcount
+    runtime: python
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+      cd frontend && npm install && npm run build
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"

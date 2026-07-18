@@ -35,25 +35,47 @@ Example: squares 45, 50, 42, 47 with dilution 2 → avg 46 → 46 × 2 × 10⁴ 
 - Python 3.10+ (developed on 3.11)
 - Node 18+
 
-## Backend (FastAPI + OpenCV)
+## Run it (one command)
+The whole app runs from a single server: FastAPI serves the built React UI, so there's
+one command and one port.
+
 ```bash
 # from the project root c:\cellcountingv2
 python -m venv .venv
 .venv\Scripts\activate            # Windows;  source .venv/bin/activate on macOS/Linux
 pip install -r requirements.txt
-uvicorn app.main:app --reload     # serves on http://localhost:8000
-```
-Check it: open http://localhost:8000/health → `{"status":"ok"}`.
 
-## Frontend (React + Vite)
-```bash
-cd frontend
-npm install
-npm run dev                       # serves on http://localhost:5173
+cd frontend && npm install && npm run build && cd ..   # build the UI once
+uvicorn app.main:app --port 8000                       # run everything
 ```
-Open http://localhost:5173. The frontend talks to the backend on port 8000 (CORS is
-preconfigured for `localhost:5173`). To point at a different backend, copy
-`.env.example` to `frontend/.env` and set `VITE_API_BASE`.
+Then open **http://localhost:8000** — that's the whole app (upload, detect, calculate).
+
+On Windows you can instead just run **`start.bat`**, which does the build + run for you.
+
+Rebuild the UI (`npm run build`) whenever you change frontend code, then restart uvicorn.
+
+## Developing the UI (optional two-server flow with hot-reload)
+For active UI work you can run the Vite dev server separately so edits hot-reload:
+```bash
+# terminal 1 — backend
+uvicorn app.main:app --reload            # http://localhost:8000
+
+# terminal 2 — frontend dev server
+cd frontend
+echo VITE_API_BASE=http://localhost:8000 > .env   # point the UI at the backend
+npm run dev                               # http://localhost:5173
+```
+Open http://localhost:5173. (In single-server mode the UI calls the same origin, so no
+`.env` is needed.)
+
+## Deploy (single service)
+Because FastAPI serves the UI, the app deploys as **one** web service. A ready-made
+`render.yaml` is included for [Render](https://render.com):
+- Build: `pip install -r requirements.txt && cd frontend && npm install && npm run build`
+- Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+
+Connect the GitHub repo in Render (or use Blueprints to pick up `render.yaml`). The same
+build/start commands work on Railway or Fly.io.
 
 ## Tuning to your microscope
 The default detection parameters were calibrated on phone-through-eyepiece brightfield
