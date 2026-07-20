@@ -40,6 +40,10 @@ _SPEC: dict[str, tuple[float, float, float]] = {
     # this multiple of the detection threshold. 1.0 = off; higher = stricter.
     "min_core_factor": (1.3, 1.0, 4.0),
     # --- preprocessing ---
+    # Flat-field sigma: Gaussian blur radius for the background estimate. Must be
+    # much larger than a cell (so cells are erased) but small enough to track the
+    # light gradient. Only used when flatfield is on.
+    "flatfield_sigma": (31, 5, 101),
     "blur_kernel": (3, 1, 15),        # odd; 1 disables blur
     "clahe_clip": (2.0, 0.0, 10.0),
     "line_kernel": (3, 1, 9),         # opening size to suppress thin grid lines
@@ -51,8 +55,9 @@ _SPEC: dict[str, tuple[float, float, float]] = {
 }
 
 _BOOL_DEFAULTS: dict[str, bool] = {
-    "auto_bright": True,              # auto-pick brightness threshold (Otsu) per image
-    "detect_dead": True,              # run the blue dead-cell pass
+    "flatfield": True,               # flatten uneven ("warped") illumination first
+    "auto_bright": True,             # auto-pick brightness threshold (Otsu) per image
+    "detect_dead": True,             # run the blue dead-cell pass
 }
 
 

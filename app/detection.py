@@ -129,6 +129,14 @@ def _crop(img: np.ndarray, box: dict, iw: int, ih: int):
 # --------------------------------------------------------------------------- #
 def _preprocess(crop: np.ndarray, params: dict) -> np.ndarray:
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+
+    # Flat-field correction: flatten the microscope's uneven ("warped") lighting so a
+    # single fixed detection threshold works across the whole image. Divide by a
+    # heavily-blurred background estimate (large sigma erases cells but keeps the light
+    # gradient), which removes the multiplicative illumination and leaves cells uniform.
+    if params["flatfield"]:
+        gray = _flat_field(gray, params["flatfield_sigma"])
+
     if params["clahe_clip"] > 0:
         clahe = cv2.createCLAHE(clipLimit=params["clahe_clip"], tileGridSize=(8, 8))
         gray = clahe.apply(gray)
@@ -136,6 +144,14 @@ def _preprocess(crop: np.ndarray, params: dict) -> np.ndarray:
     if k >= 3:
         gray = cv2.medianBlur(gray, k)
     return gray
+
+
+def _flat_field(gray: np.ndarray, sigma: float) -> np.ndarray:
+    """Divide out the large-scale illumination gradient; return a uint8 flat image."""
+    bg = cv2.GaussianBlur(gray, (0, 0), sigma)
+    bg = np.maximum(bg.astype(np.float32), 1.0)
+    norm = gray.astype(np.float32) / bg
+    return cv2.normalize(norm, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
 
 # --------------------------------------------------------------------------- #
