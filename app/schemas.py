@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -42,3 +44,28 @@ class BoxDetectResponse(BaseModel):
     box: Box | None          # normalized counting square, or None if not confident
     confidence: float        # 0-1
     source: str              # "auto" | "failed"
+
+
+# --- annotation / training-label models ------------------------------------ #
+class Point(BaseModel):
+    """A ground-truth cell mark, normalized (0-1) to the full image."""
+
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+    type: Literal["live", "dead"] = "live"
+
+
+class LabelRecord(BaseModel):
+    """One human-annotated image: the counting box + the true cell points."""
+
+    box: Box
+    points: list[Point]
+    image_width: int = Field(gt=0)
+    image_height: int = Field(gt=0)
+    source_detector_count: int = 0  # how many the auto-detector had proposed
+
+
+class LabelSaveResponse(BaseModel):
+    id: str
+    saved: bool
+    total_labels: int
