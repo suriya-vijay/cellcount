@@ -2,6 +2,7 @@ import { useState } from "react";
 import UploadScreen from "./components/UploadScreen.jsx";
 import ProcessingScreen from "./components/ProcessingScreen.jsx";
 import ResultsScreen from "./components/ResultsScreen.jsx";
+import LabelingScreen from "./components/LabelingScreen.jsx";
 import { detect, defaultParams } from "./api.js";
 
 const EMPTY_SQUARE = () => ({
@@ -11,7 +12,7 @@ const EMPTY_SQUARE = () => ({
 });
 
 export default function App() {
-  const [screen, setScreen] = useState("upload"); // upload | processing | results
+  const [screen, setScreen] = useState("upload"); // upload | processing | results | labeling
   const [squares, setSquares] = useState([
     EMPTY_SQUARE(),
     EMPTY_SQUARE(),
@@ -22,6 +23,7 @@ export default function App() {
   const [params, setParams] = useState(defaultParams());
   const [results, setResults] = useState([null, null, null, null]);
   const [errors, setErrors] = useState([null, null, null, null]);
+  const [labelIndex, setLabelIndex] = useState(0);
 
   async function runAnalysis() {
     setScreen("processing");
@@ -104,6 +106,18 @@ export default function App() {
           setParams={setParams}
           onReRun={reRunSquare}
           onReset={reset}
+          onOpenLabeling={(i) => {
+            setLabelIndex(i);
+            setScreen("labeling");
+          }}
+        />
+      )}
+      {screen === "labeling" && (
+        <LabelingScreen
+          square={squares[labelIndex]}
+          params={params}
+          seedCells={results[labelIndex]?.cells}
+          onClose={() => setScreen("results")}
         />
       )}
     </div>

@@ -89,9 +89,27 @@ photos. Your scope/camera may differ. On the results screen, adjust:
 Changes re-count the active square instantly.
 
 ## Known limitations
-Auto-counting is an estimate. Weak spots: clumped/touching cells (enable "Split touching
-cells"), out-of-focus or color-shifted images, very high density (dilute further or draw
-a smaller box), and cell-sized round debris. Verify manually when precision is critical.
+Auto-counting is an estimate. Weak spots: clumped/touching cells, out-of-focus or
+color-shifted images, very high density (dilute further or draw a smaller box), and
+cell-sized round debris. Verify manually when precision is critical. These are inherent
+limits of the classical detector — see "Labeling" for the path to a learned model.
+
+## Labeling (collecting training data for a future ML model)
+The classical detector struggles with touching cells and grid lines. The planned fix is a
+small machine-learning model trained on your own labeled images. To collect labels:
+
+1. Run CellCount **locally** (`start.bat` or `uvicorn app.main:app`) — labels save to a
+   local `labels/` folder. (On the hosted free tier the disk is wiped on restart, so the
+   Label screen is disabled there.)
+2. Upload an image, draw the box, run analysis, then click **"Label this image →"** on the
+   results screen.
+3. The detector's guesses appear as muted dots. **Tap** an empty spot to add a missed cell,
+   **tap** a dot to remove a wrong one, **drag** to reposition; Undo is Ctrl/Cmd-Z. Save.
+4. When you've labeled a batch (~30–50 images), click **"Download training set (.zip)"** —
+   it bundles every image + a `manifest.json` with pixel-coordinate points, ready to train a
+   density-map counter on Google Colab.
+
+`labels/` is gitignored (your lab photos stay local).
 
 ## Tests
 ```bash
