@@ -19,8 +19,8 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .detection import DetectionError, detect_cells
-from .schemas import Box, DetectResponse
+from .detection import DetectionError, detect_box, detect_cells
+from .schemas import Box, BoxDetectResponse, DetectResponse
 
 app = FastAPI(title="CellCount", version="1.0.0")
 
@@ -73,6 +73,25 @@ async def detect(
         raise HTTPException(status_code=500, detail=f"detection failed: {exc}")
 
     return DetectResponse(**result)
+
+
+@app.post("/detect-box", response_model=BoxDetectResponse)
+async def detect_box_endpoint(image: UploadFile = File(...)) -> BoxDetectResponse:
+    """Auto-suggest the counting square for one uploaded image.
+
+    Returns a box + confidence when it finds a plausible square; otherwise
+    box=None so the UI falls back to manual drawing. One-time, upload-time call.
+    """
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(status_code=422, detail="empty image upload")
+    try:
+        result = detect_box(image_bytes, None)
+    except DetectionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=500, detail=f"box detection failed: {exc}")
+    return BoxDetectResponse(**result)
 
 
 # --- Serve the built React app (single-command / single-server mode) --------- #

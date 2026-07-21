@@ -304,3 +304,143 @@ def _dedupe(candidates: list[dict]) -> list[dict]:
         if not dup:
             kept.append(cand)
     return kept
+
+
+# =========================================================================== #
+# Automatic counting-box detection (hybrid: auto-suggest, manual fallback).
+#
+# Honest note: on badly-lit ("warped") images the faint horizontal grid lines
+# are often undetectable, so this returns box=None (→ the UI falls back to
+# manual drawing). It only emits a box when it finds strong line-pairs forming a
+# plausible square, and reports a confidence the UI can act on. It is never worse
+# than the existing manual flow.
+# =========================================================================== #
+def detect_box(image_bytes: bytes, raw_params: dict | None = None) -> dict:
+    """Detect the hemocytometer counting square.
+
+    Returns {"box": {x0,y0,x1,y1} | None, "confidence": float, "source": str}.
+    box coords are normalized to the full image, so they round-trip like a
+    manually drawn box (detect_cells/overlay need no changes).
+    """
+    params = resolve_params(raw_params)
+    img = _decode(image_bytes)
+    ih, iw = img.shape[:2]
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    fov = _field_of_view(gray)
+    if fov is None:
+        return {"box": None, "confidence": 0.0, "source": "failed"}
+    cx, cy, R = fov
+
+    # Grid-line response: adaptive threshold on the flat-fielded image isolates
+    # local bright ruling regardless of the illumination warp.
+    ff = _flat_field(gray, params["flatfield_sigma"])
+    lines = cv2.adaptiveThreshold(
+        ff, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 31, -8
+    )
+    # constrain to the field of view, minus a margin that kills boundary artifacts
+    mask = np.zeros_like(gray)
+    cv2.circle(mask, (int(cx), int(cy)), int(R * 0.88), 255, -1)
+    lines = cv2.bitwise_and(lines, mask)
+
+    L = max(15, int(0.12 * R))
+    y_lines = _line_positions(lines, L, axis=1)   # horizontal grid lines (y)
+    x_lines = _line_positions(lines, L, axis=0)   # vertical grid lines (x)
+
+    diam = 2 * R
+    lo, hi = 0.25 * diam, 0.75 * diam             # plausible square side range
+    ypair = _pick_square_pair(y_lines, cy, lo, hi)
+    xpair = _pick_square_pair(x_lines, cx, lo, hi)
+    if ypair is None or xpair is None:
+        return {"box": None, "confidence": 0.0, "source": "failed"}
+
+    (y0, y1, ys) = ypair
+    (x0, x1, xs) = xpair
+
+    conf = _box_confidence(x0, y0, x1, y1, xs, ys)
+    if conf < params["box_min_confidence"]:
+        return {"box": None, "confidence": round(conf, 3), "source": "failed"}
+
+    return {
+        "box": {"x0": x0 / iw, "y0": y0 / ih, "x1": x1 / iw, "y1": y1 / ih},
+        "confidence": round(conf, 3),
+        "source": "auto",
+    }
+
+
+def _field_of_view(gray: np.ndarray):
+    """Largest not-black region → (center_x, center_y, radius) or None."""
+    _, notblack = cv2.threshold(gray, 25, 255, cv2.THRESH_BINARY)
+    cnts, _ = cv2.findContours(notblack, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cnts:
+        return None
+    c = max(cnts, key=cv2.contourArea)
+    if cv2.contourArea(c) < 0.15 * gray.size:      # implausibly small FOV
+        return None
+    (cx, cy), R = cv2.minEnclosingCircle(c)
+    return cx, cy, R
+
+
+def _line_positions(binary: np.ndarray, length: int, axis: int):
+    """Return [(position, strength)] of grid lines along the given axis.
+
+    axis=1 → horizontal lines (positions are y); axis=0 → vertical lines (x).
+    Excludes the outer 5% border (kills FOV-boundary artifacts).
+    """
+    k = (length, 1) if axis == 1 else (1, length)
+    opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN,
+                              cv2.getStructuringElement(cv2.MORPH_RECT, k))
+    prof = opened.sum(axis=axis).astype(np.float32)
+    prof = cv2.GaussianBlur(prof.reshape(-1, 1), (1, 7), 0).ravel()
+
+    n = len(prof)
+    margin = int(0.05 * n)
+    prof[:margin] = 0
+    prof[n - margin:] = 0
+    if prof.max() <= 0:
+        return []
+
+    thr = prof.max() * 0.3
+    peaks = []
+    for i in range(1, n - 1):
+        if prof[i] >= thr and prof[i] >= prof[i - 1] and prof[i] >= prof[i + 1]:
+            if peaks and i - peaks[-1][0] <= 8:      # non-max suppress close peaks
+                if prof[i] > peaks[-1][1]:
+                    peaks[-1] = (i, float(prof[i]))
+            else:
+                peaks.append((i, float(prof[i])))
+    return peaks
+
+
+def _pick_square_pair(positions, center, lo, hi):
+    """Choose the strongest pair ~square-side apart, biased toward the center.
+
+    Returns (a, b, avg_strength) with a<b, or None.
+    """
+    best = None
+    for i in range(len(positions)):
+        for j in range(i + 1, len(positions)):
+            pa, sa = positions[i]
+            pb, sb = positions[j]
+            side = pb - pa
+            if side < lo or side > hi:
+                continue
+            mid = (pa + pb) / 2
+            score = (sa + sb) - abs(mid - center) * 3
+            if best is None or score > best[0]:
+                best = (score, pa, pb, (sa + sb) / 2)
+    if best is None:
+        return None
+    return best[1], best[2], best[3]
+
+
+def _box_confidence(x0, y0, x1, y1, xs, ys) -> float:
+    """0-1 confidence: penalize non-square aspect and weak line strength."""
+    w, h = x1 - x0, y1 - y0
+    if w <= 0 or h <= 0:
+        return 0.0
+    aspect = min(w, h) / max(w, h)              # 1.0 = perfect square
+    aspect_score = max(0.0, (aspect - 0.6) / 0.4)  # 0 below 0.6, 1 at 1.0
+    strength = min(xs, ys)
+    strength_score = min(1.0, strength / 3000.0)   # profile-sum scale
+    return round(aspect_score * strength_score, 4)

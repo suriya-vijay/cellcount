@@ -36,3 +36,9 @@ class DetectResponse(BaseModel):
     total_count: int
     bright_used: int  # the brightness threshold actually applied (auto or manual)
     viability: float  # live / total, 0.0 when no cells
+
+
+class BoxDetectResponse(BaseModel):
+    box: Box | None          # normalized counting square, or None if not confident
+    confidence: float        # 0-1
+    source: str              # "auto" | "failed"

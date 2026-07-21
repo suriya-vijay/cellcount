@@ -52,6 +52,9 @@ _SPEC: dict[str, tuple[float, float, float]] = {
     "blue_excess": (18, 0, 150),      # how much B must exceed R/G mean to be "blue"
     "v_dead_max": (170, 0, 255),      # dead cells are darker than this
     "sat_min": (40, 0, 255),          # min saturation to count as stained
+    # --- automatic counting-box detection ---
+    # Below this confidence, detect_box returns no box (UI falls back to manual draw).
+    "box_min_confidence": (0.35, 0.0, 1.0),
 }
 
 _BOOL_DEFAULTS: dict[str, bool] = {
