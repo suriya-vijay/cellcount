@@ -1,5 +1,6 @@
 import BoxDrawer from "./BoxDrawer.jsx";
 import { MicroscopeIcon } from "./icons.jsx";
+import { detectBox } from "../api.js";
 
 const ACCEPT = ".jpg,.jpeg,.png,.tiff,.tif";
 
@@ -18,11 +19,29 @@ export default function UploadScreen({
     });
   }
 
-  function onPick(i, file) {
+  async function onPick(i, file) {
     if (!file) return;
     const prev = squares[i];
     if (prev.url) URL.revokeObjectURL(prev.url);
-    setSquare(i, { file, url: URL.createObjectURL(file), box: null });
+    setSquare(i, {
+      file,
+      url: URL.createObjectURL(file),
+      box: null,
+      boxSource: "detecting",
+    });
+
+    // Try to auto-suggest the counting box. On success the box pre-fills and the
+    // user can drag to adjust; on low confidence it stays null → manual draw.
+    try {
+      const { box, confidence, source } = await detectBox(file);
+      if (source === "auto" && box) {
+        setSquare(i, { box, boxSource: confidence >= 0.6 ? "auto" : "auto-verify" });
+      } else {
+        setSquare(i, { boxSource: "manual" });
+      }
+    } catch {
+      setSquare(i, { boxSource: "manual" });
+    }
   }
 
   const allReady =
@@ -52,8 +71,24 @@ export default function UploadScreen({
           <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="font-semibold">Square {i + 1}</span>
-              {sq.box ? (
-                <span className="text-xs text-teal-700 font-medium">✓ box drawn</span>
+              {sq.boxSource === "detecting" ? (
+                <span className="text-xs text-slate-400 font-medium">
+                  detecting box…
+                </span>
+              ) : sq.box ? (
+                <span
+                  className={`text-xs font-medium ${
+                    sq.boxSource === "auto-verify"
+                      ? "text-amber-600"
+                      : "text-teal-700"
+                  }`}
+                >
+                  {sq.boxSource === "auto"
+                    ? "✓ auto box — drag to adjust"
+                    : sq.boxSource === "auto-verify"
+                    ? "auto box — please verify"
+                    : "✓ box drawn"}
+                </span>
               ) : sq.file ? (
                 <span className="text-xs text-amber-600 font-medium">
                   draw a box ↓
@@ -78,7 +113,7 @@ export default function UploadScreen({
                 <BoxDrawer
                   url={sq.url}
                   box={sq.box}
-                  onChange={(box) => setSquare(i, { box })}
+                  onChange={(box) => setSquare(i, { box, boxSource: "manual" })}
                 />
                 <button
                   className="mt-2 text-xs text-slate-500 hover:text-teal-700 underline"

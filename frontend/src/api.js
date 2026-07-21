@@ -68,3 +68,13 @@ export async function detect(image, box, params) {
   }
   return res.json();
 }
+
+// Auto-suggest the counting box for one image. Returns {box, confidence, source}.
+// box is null when detection isn't confident (caller falls back to manual draw).
+export async function detectBox(image) {
+  const form = new FormData();
+  form.append("image", image);
+  const res = await fetch(`${BASE}/detect-box`, { method: "POST", body: form });
+  if (!res.ok) return { box: null, confidence: 0, source: "failed" };
+  return res.json();
+}
