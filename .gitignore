@@ -9,5 +9,7 @@ frontend/.env
 samples/
 # Annotation labels (user's lab photos + JSON) — local training data, not committed
 labels/
+# ML training artifacts (checkpoints, previews, reports) — code is tracked, outputs aren't
+ml/runs/
 # Claude Code project settings (machine/workflow-specific, not part of the app)
 .claude/

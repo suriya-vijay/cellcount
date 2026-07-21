@@ -1,0 +1,7 @@
+# Training-only dependencies. NOT needed to run the web app — keep the runtime
+# lean (app/ depends on cv2 + numpy only). Install with:
+#   .venv\Scripts\python.exe -m pip install -r requirements-ml.txt
+#
+# CPU-only torch (no CUDA) — smaller download, and this machine has no GPU.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1
