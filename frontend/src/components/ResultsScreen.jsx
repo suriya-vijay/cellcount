@@ -14,7 +14,6 @@ export default function ResultsScreen({
   setParams,
   onReRun,
   onReset,
-  onOpenLabeling,
 }) {
   const [active, setActive] = useState(0);
   const [showMarkers, setShowMarkers] = useState(true);
@@ -94,21 +93,12 @@ export default function ResultsScreen({
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onOpenLabeling?.(active)}
-                className="text-sm rounded-lg border border-slate-300 px-3 py-1 hover:bg-slate-50"
-                title="Correct the detected cells and save as training data"
-              >
-                Label this image →
-              </button>
-              <button
-                onClick={() => setShowMarkers((v) => !v)}
-                className="text-sm rounded-lg border border-slate-300 px-3 py-1 hover:bg-slate-50"
-              >
-                {showMarkers ? "Hide Markers" : "Show Markers"}
-              </button>
-            </div>
+            <button
+              onClick={() => setShowMarkers((v) => !v)}
+              className="text-sm rounded-lg border border-slate-300 px-3 py-1 hover:bg-slate-50"
+            >
+              {showMarkers ? "Hide Markers" : "Show Markers"}
+            </button>
           </div>
 
           {sq?.url ? (

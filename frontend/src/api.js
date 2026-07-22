@@ -78,35 +78,3 @@ export async function detectBox(image) {
   if (!res.ok) return { box: null, confidence: 0, source: "failed" };
   return res.json();
 }
-
-// Whether labeling is available here (local disk) + how many labels collected.
-export async function labelsStatus() {
-  try {
-    const res = await fetch(`${BASE}/labels/status`);
-    if (!res.ok) return { enabled: false, count: 0 };
-    return res.json();
-  } catch {
-    return { enabled: false, count: 0 };
-  }
-}
-
-// Save one annotated image + corrected point set as training ground truth.
-// record: {box, points:[{x,y,type}], image_width, image_height, source_detector_count}
-export async function saveLabels(image, record) {
-  const form = new FormData();
-  form.append("image", image);
-  form.append("record", JSON.stringify(record));
-  const res = await fetch(`${BASE}/labels`, { method: "POST", body: form });
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      detail = (await res.json()).detail || detail;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail);
-  }
-  return res.json();
-}
-
-export const LABELS_EXPORT_URL = `${BASE}/labels/export.zip`;
