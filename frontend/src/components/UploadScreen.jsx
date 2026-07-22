@@ -12,6 +12,7 @@ export default function UploadScreen({
   dilution,
   setDilution,
   onAnalyze,
+  warming,
 }) {
   function setSquare(i, patch) {
     setSquares((prev) => {
@@ -44,6 +45,13 @@ export default function UploadScreen({
             want counted.
           </p>
         </div>
+
+        {warming && (
+          <p className="mb-4 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted-fg">
+            Starting the server… the first load after a quiet period can take up to a
+            minute. You can add your photos meanwhile.
+          </p>
+        )}
 
         <ol className="mb-6 grid gap-2 rounded-xl border border-border bg-surface p-4 text-sm text-muted-fg sm:grid-cols-3">
           <li>

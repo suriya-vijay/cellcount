@@ -143,11 +143,15 @@ Pushing to `main` triggers a redeploy. The same commands work on Railway or Fly.
 ## Tests
 
 ```bash
-.venv\Scripts\python.exe tests\test_detection.py
+.venv\Scripts\python.exe tests\test_detection.py     # synthetic, no data needed
+.venv\Scripts\python.exe tests\accuracy_check.py     # scores against labeled data
 ```
-Uses synthetic images, so it needs no sample data. `tests/calibrate.py` and `tests/tune.py` run
-detection over images in `samples/` and write overlay PNGs for visual inspection — add your own
-images there (`samples/` is gitignored; lab photos stay local).
+`accuracy_check.py` scores detection against hand-labeled ground truth at 1×/3×/5× resolution and
+fails below 80%. **Run it after any change to detection** — it exists because a scale bug once
+shipped and dropped phone-photo accuracy to 1.5%.
+
+`tests/calibrate.py` and `tests/tune.py` write overlay PNGs for visual inspection. All of these
+need images in `samples/` or `labels/`, which are gitignored (lab photos stay local).
 
 ---
 
@@ -169,3 +173,39 @@ render.yaml     single-service deploy config
 ## Notes
 - Images are processed per request and never stored on the server.
 - Reloading the page keeps your counts and calculations; the photos themselves aren't retained.
+
+---
+
+## Maintenance (for future me)
+
+**Redeploying.** Pushing to `main` triggers a Render redeploy automatically. If the service is ever
+deleted, recreate it with **New → Blueprint** pointed at this repo — `render.yaml` has everything.
+The same build/start commands work on Railway or Fly.io if Render's free tier changes.
+
+**After ANY frontend change**, rebuild and commit the build output — the deployment serves the
+committed `frontend/dist`, not a build step on the server:
+```bash
+cd frontend && npm run build && cd .. && git add frontend/dist && git commit && git push
+```
+Forget this and the live site keeps serving the old UI while the repo looks updated.
+
+**After ANY detection change**, run `tests/accuracy_check.py`. In particular:
+
+> **Do not raise `detect_width` (currently 316) in `app/params.py`.** Every detection parameter is
+> in pixels and was tuned on ~316px-wide crops. Measured on phone-resolution photos:
+> 316 → 92.8% accuracy, 400 → 83.7%, 700 → 50.0%, 900 → **1.5%**. It was set to 900 once and
+> broke phone counting completely.
+
+**Dependencies are pinned** (`requirements.txt`, `PYTHON_VERSION` in `render.yaml`) so the build
+stays reproducible. If you upgrade anything, re-run both test scripts before pushing.
+
+**Known limitations** (documented, not bugs to chase):
+- ~11% detection error; clustered/touching cells can be under-counted and grid lines occasionally
+  marked. Real improvement needs more labeled images, not more parameter tuning — see `ml/`.
+- Free tier sleeps after ~15 min idle → first request takes ~50s. The app pings `/health` on load
+  to warm up early and explains the wait, but it can't remove it.
+- Photos aren't retained across a page reload (only counts and calculations are).
+
+## License
+
+MIT — see [LICENSE](LICENSE).

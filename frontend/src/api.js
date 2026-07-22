@@ -4,6 +4,65 @@
 // For the two-server dev flow, set VITE_API_BASE=http://localhost:8000 in frontend/.env.
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
+// Free hosting sleeps when idle, so the first request after a quiet period has to
+// wait for the server to boot (~50s). Allow for that instead of failing fast.
+const TIMEOUT_MS = 90_000;
+
+/** Nudge the server awake. Fire-and-forget: called on app load so the backend is
+ *  warming up while the user is still adding photos. Failures are irrelevant. */
+export function wake() {
+  return fetch(`${BASE}/health`, { cache: "no-store" })
+    .then((r) => r.ok)
+    .catch(() => false);
+}
+
+/** POST with a timeout, one retry, and human-readable failures.
+ *  Raw fetch rejections surface as "Failed to fetch", which reads as "the app is
+ *  broken" to a user who has no idea the server was asleep. */
+async function post(path, form, { retry = true } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      let detail = `Server error (${res.status}).`;
+      try {
+        const body = await res.json();
+        if (body.detail) detail = body.detail;
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new Error(detail);
+    }
+    return await res.json();
+  } catch (err) {
+    // A sleeping instance usually answers on the second attempt.
+    if (retry && (err.name === "AbortError" || err instanceof TypeError)) {
+      return post(path, form, { retry: false });
+    }
+    throw new Error(friendlyError(err));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function friendlyError(err) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Check your connection and try again.";
+  }
+  if (err.name === "AbortError" || err instanceof TypeError) {
+    return (
+      "Couldn't reach the server. It may be waking up — free hosting sleeps when " +
+      "idle and can take up to a minute. Please try again."
+    );
+  }
+  return err.message || "Something went wrong. Please try again.";
+}
+
 // Slider definitions: must stay consistent with backend app/params.py.
 // Each: key, label, min, max, step, default. Booleans use type:"toggle".
 // group: "sensitivity" (common, shown first) | "advanced" (collapsed sub-section)
@@ -54,19 +113,7 @@ export async function detect(image, box, params) {
   form.append("image", image);
   form.append("box", JSON.stringify(box));
   form.append("params", JSON.stringify(params));
-
-  const res = await fetch(`${BASE}/detect`, { method: "POST", body: form });
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail);
-  }
-  return res.json();
+  return post("/detect", form);
 }
 
 // Auto-suggest the counting box for one image. Returns {box, confidence, source}.
@@ -74,7 +121,10 @@ export async function detect(image, box, params) {
 export async function detectBox(image) {
   const form = new FormData();
   form.append("image", image);
-  const res = await fetch(`${BASE}/detect-box`, { method: "POST", body: form });
-  if (!res.ok) return { box: null, confidence: 0, source: "failed" };
-  return res.json();
+  try {
+    return await post("/detect-box", form);
+  } catch {
+    // Auto-box is a convenience; on failure the user just draws it manually.
+    return { box: null, confidence: 0, source: "failed" };
+  }
 }

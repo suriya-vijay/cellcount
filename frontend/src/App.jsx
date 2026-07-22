@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import UploadScreen from "./components/UploadScreen.jsx";
 import ProcessingScreen from "./components/ProcessingScreen.jsx";
 import ResultsScreen from "./components/ResultsScreen.jsx";
-import { detect, defaultParams } from "./api.js";
+import { detect, defaultParams, wake } from "./api.js";
 import { saveSession, loadSession, clearSession } from "./session.js";
 
 const EMPTY_SQUARE = () => ({
@@ -42,6 +42,21 @@ export default function App() {
       saveSession({ screen, dilution, params, results, errors, squares });
     }
   }, [screen, dilution, params, results, errors, squares]);
+
+  // Wake the backend as soon as the page opens, so it boots while the user is
+  // still adding photos. Free hosting sleeps when idle; without this the first
+  // analysis eats the whole ~50s cold start. Only surface a notice if it's slow.
+  const [warming, setWarming] = useState(false);
+  useEffect(() => {
+    let done = false;
+    const slow = setTimeout(() => !done && setWarming(true), 2500);
+    wake().finally(() => {
+      done = true;
+      clearTimeout(slow);
+      setWarming(false);
+    });
+    return () => clearTimeout(slow);
+  }, []);
 
   async function runAnalysis() {
     setScreen("processing");
@@ -112,6 +127,7 @@ export default function App() {
           dilution={dilution}
           setDilution={setDilution}
           onAnalyze={runAnalysis}
+          warming={warming}
         />
       )}
       {screen === "processing" && <ProcessingScreen />}
