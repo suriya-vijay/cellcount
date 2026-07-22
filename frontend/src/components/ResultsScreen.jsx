@@ -122,6 +122,16 @@ export default function ResultsScreen({
                     showMarkers={showMarkers}
                     busy={busy}
                   />
+                ) : sq?.photoMissing ? (
+                  <div className="rounded-lg border border-dashed border-border bg-background p-6 text-center">
+                    <p className="text-sm font-medium text-foreground">
+                      Photo not kept after reload
+                    </p>
+                    <p className="mt-1 text-xs text-muted-fg">
+                      Your counts and calculations are preserved — the image itself
+                      isn’t stored. Start a new count to re-analyze photos.
+                    </p>
+                  </div>
                 ) : (
                   <p className="p-6 text-center text-sm text-muted-fg">
                     No image for this square.

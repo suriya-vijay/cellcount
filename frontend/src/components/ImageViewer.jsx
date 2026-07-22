@@ -42,12 +42,19 @@ export default function ImageViewer({ url, box, cells, showMarkers, busy }) {
     // While a re-detect is in flight, dim the existing markers so the view never
     // flashes empty — they're swapped for fresh ones the moment the result lands.
     ctx.globalAlpha = busy ? 0.35 : 1;
+
+    // Marker size must scale with the RENDERED image. A fixed pixel floor makes
+    // every marker identical on a small phone screen, so they stop matching real
+    // cell sizes and visually pile up. Use a proportional floor + stroke instead.
+    const minR = Math.max(2, size.w * 0.004);
+    const lineW = Math.max(1, size.w * 0.0035);
+
     cells.forEach((c) => {
       ctx.beginPath();
-      const r = Math.max(5, c.radius * size.w);
+      const r = Math.max(minR, c.radius * size.w);
       ctx.arc(c.x * size.w, c.y * size.h, r, 0, Math.PI * 2);
       ctx.strokeStyle = c.type === "dead" ? "#ef4444" : "#22c55e";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = lineW;
       ctx.stroke();
     });
     ctx.globalAlpha = 1;

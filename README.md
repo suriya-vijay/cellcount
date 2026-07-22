@@ -1,155 +1,161 @@
 # CellCount
 
-Automated hemocytometer cell counting for the lab. Add one microscope photo per counting
-square, drag a box over the square, and CellCount counts the cells (live vs. dead via
-trypan blue) and computes the cell density. Works on desktop and on a phone browser.
+**Live app → https://cellcount-ecig.onrender.com** — deployed and ready to use, on desktop or
+phone. No install, no account.
 
-**Measured accuracy: ~89% count accuracy (F1 0.81)** on held-out test images scored
-against hand-labeled ground truth. Counts are estimates — verify manually when precision
-is critical.
+Automated hemocytometer cell counting for the lab. Add one microscope photo per counting square,
+drag a box over the square you want counted, and CellCount finds the cells (live vs. dead via
+trypan blue), computes the cell density, and gives you a PDF report.
 
-**The counting engine is classical OpenCV — not an AI/LLM.** This is deliberate and
-measured: a density-map neural network was trained on hand-labeled images and scored
-**59% vs. the classical pipeline's 89%** on the same held-out images (too little training
-data). The classical pipeline is deterministic, runs offline, and needs no GPU. The ML
-experiment is kept in `ml/` for a future revisit with a larger dataset.
+### Measured accuracy
+
+**~89% count accuracy (F1 0.81)** on held-out test images, scored against hand-labeled ground
+truth the model never saw during development. Counts are automated estimates — verify manually
+when precision is critical.
+
+That number is measured, not claimed. See [Accuracy & the ML experiment](#accuracy--the-ml-experiment).
+
+---
+
+## Using it on your phone
+
+1. Open **https://cellcount-ecig.onrender.com**
+2. For each of the 4 squares, tap **Camera** (shoots through the eyepiece) or **Choose** (pick an
+   existing photo).
+3. **Drag a box** with your finger over the counting square in each photo.
+4. Enter the **dilution factor** — the numeric factor only. For a 1:2 dilution (equal parts sample
+   and trypan blue), enter `2`.
+5. Tap **Analyze cells**, then **Download PDF report** to save the results.
+
+> **First load may take ~50 seconds.** The free hosting tier sleeps after inactivity and has to
+> wake up. Every request after that is fast.
+
+### Counting rules
+- Only cells **inside the box you drew** are counted.
+- Cells touching the **top/left** box edge are counted; **bottom/right** edge cells are excluded
+  (the standard hemocytometer rule that prevents double-counting between squares).
+- Live cells are bright dots; dead cells are dark-blue (trypan-blue stained).
+
+### The math
+```
+average  = total cells across the 4 squares / 4
+density  = average × dilution × 10,000   cells/mL
+         = density / 1,000,000            million cells/mL
+```
+Worked example: squares of 45, 50, 42, 47 at dilution 2 → average 46 → 46 × 2 × 10⁴ = 920,000 =
+**0.92 million cells/mL**.
+
+The **Seed or dilute** panel then solves `M1V1 = M2V2` so you can hit a target density.
+
+---
 
 ## How it works
 
-1. **Upload** an image for each of the 4 counting squares.
-2. **Draw a box** on each image over one hemocytometer counting square (on the gridlines).
-3. **Enter the dilution factor** (for a 1:2 dilution, enter `2`).
-4. **Analyze.** Each square is counted independently inside its box.
-5. **Tune live** on the results screen with sliders if the defaults miss your cells.
+The counting engine is **classical computer vision (OpenCV)** — deterministic, offline, no GPU:
 
-### Counting rules
-- Cells touching the **top/left** box edge are counted; **bottom/right** edge cells are
-  excluded (standard hemocytometer de-duplication).
-- Live cells = bright dots (top-hat detection). Dead cells = dark-blue stained dots.
+1. Crop to the box you drew (this also removes the dark vignette at the edge of the field of view).
+2. Flat-field correction to flatten uneven microscope lighting.
+3. White top-hat transform to isolate small bright cells from the background, with the brightness
+   threshold chosen automatically per image (Otsu).
+4. Reject non-cells by size, roundness, elongation, fill, and core brightness — this is what keeps
+   grid lines and debris out of the count.
+5. Classify dead cells by their blue/dark signature.
 
-### Density formula
-```
-average  = total cells / 4
-density  = average × dilution × 10,000  cells/mL
-         = density / 1,000,000           million cells/mL
-```
-Example: squares 45, 50, 42, 47 with dilution 2 → avg 46 → 46 × 2 × 10⁴ = 920,000 =
-**0.92 million cells/mL**.
+Detection settings are exposed on the results screen if a particular image needs adjusting, but
+brightness is automatic and most images need no tuning.
 
-## Prerequisites
-- Python 3.10+ (developed on 3.11)
-- Node 18+
+---
 
-## Run it (one command)
-The whole app runs from a single server: FastAPI serves the built React UI, so there's
-one command and one port.
+## Accuracy & the ML experiment
+
+A density-map neural network was built and trained on hand-labeled images to try to beat the
+classical pipeline (the goal was better handling of touching cells and grid lines). It was scored
+honestly on held-out images:
+
+| | Count accuracy | F1 |
+|---|---|---|
+| Classical pipeline (shipping) | **89.1%** | **0.81** |
+| Density-map model | 59.1% | 0.35 |
+
+**The classical pipeline won**, so it's what ships. The model lost because 7 labeled images
+(312 cells) is far too little training data — not because the approach is wrong. The training code
+is kept in `ml/` to revisit with a larger dataset.
+
+**Known limits:** tightly clustered/touching cells can be under-counted, and occasional grid-line
+or debris artifacts can be marked. That's the ~11%.
+
+---
+
+## Run it locally
+
+Prerequisites: Python 3.10+ (developed on 3.11), Node 18+ (only to rebuild the UI).
 
 ```bash
-# from the project root c:\cellcountingv2
 python -m venv .venv
 .venv\Scripts\activate            # Windows;  source .venv/bin/activate on macOS/Linux
 pip install -r requirements.txt
-
-cd frontend && npm install && npm run build && cd ..   # build the UI once
-uvicorn app.main:app --port 8000                       # run everything
+uvicorn app.main:app --port 8000
 ```
-Then open **http://localhost:8000** — that's the whole app (upload, detect, calculate).
+Open **http://localhost:8000** — one server serves both the API and the UI.
 
-On Windows you can instead just run **`start.bat`**, which does the build + run for you.
+On Windows you can just run **`start.bat`** (builds the UI, then starts the server).
 
-Rebuild the UI (`npm run build`) whenever you change frontend code, then restart uvicorn.
+To reach it from a phone on the same Wi-Fi, start with `--host 0.0.0.0` and open
+`http://<your-computer-ip>:8000`.
 
-## Developing the UI (optional two-server flow with hot-reload)
-For active UI work you can run the Vite dev server separately so edits hot-reload:
+### Changing the UI
 ```bash
-# terminal 1 — backend
-uvicorn app.main:app --reload            # http://localhost:8000
-
-# terminal 2 — frontend dev server
-cd frontend
-echo VITE_API_BASE=http://localhost:8000 > .env   # point the UI at the backend
-npm run dev                               # http://localhost:5173
+cd frontend && npm install && npm run build     # then commit frontend/dist
 ```
-Open http://localhost:5173. (In single-server mode the UI calls the same origin, so no
-`.env` is needed.)
+`frontend/dist` is committed on purpose so the deployment needs Python only.
 
-## Use it on your phone
-The UI is mobile-first: open the deployed URL in your phone browser, tap **Camera** (or
-**Choose**) for each of the 4 squares, drag a box with your finger over the counting
-square, enter the dilution factor, and tap **Analyze cells**. Tap **Download PDF report**
-to save the results.
+---
 
-## Deploy (free, single service)
-FastAPI serves the UI, so the whole app is **one** web service — no separate frontend
-host needed (Vercel can't run the Python/OpenCV backend, so don't split it).
+## Deploy
 
-`frontend/dist` is **committed**, so the server needs Python only:
+Already deployed — this section is for redeploying or forking.
 
-1. Push the repo to GitHub.
-2. On [Render](https://render.com): **New → Blueprint** → select this repo. It reads
-   `render.yaml` (build `pip install -r requirements.txt`, start
-   `uvicorn app.main:app --host 0.0.0.0 --port $PORT`).
-3. Open the resulting URL on any device.
+The app is **one service**: FastAPI serves the API *and* the prebuilt React UI.
+**Vercel is not used and not needed** — it can't run the Python/OpenCV backend, and splitting the
+app across two hosts would add work for no benefit.
 
-After changing frontend code: `cd frontend && npm run build`, then commit `dist/`.
+On [Render](https://render.com): **New → Blueprint → select this repo.** It reads `render.yaml`:
+- build: `pip install -r requirements.txt`
+- start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 
-> **Free-tier caveat:** Render free services sleep after ~15 minutes idle, so the first
-> request after a quiet period takes ~30–60 seconds to wake up. Subsequent requests are
-> fast. The same setup works on Railway or Fly.io.
+Pushing to `main` triggers a redeploy. The same commands work on Railway or Fly.io.
 
-## Tuning to your microscope
-The default detection parameters were calibrated on phone-through-eyepiece brightfield
-photos. Your scope/camera may differ. On the results screen, adjust:
-- **Brightness sensitivity** — lower catches dimmer cells (and more noise).
-- **Cell isolation size / min–max radius** — match your cells' pixel size.
-- **Roundness filter** — higher rejects grid lines and debris.
-- **Grid-line suppression** — increase if gridlines are being counted.
-- **Dead darkness / blue sensitivity** — calibrate trypan-blue dead-cell detection.
+> Free tier caveat: the service sleeps after ~15 minutes idle, so the first request afterwards
+> takes ~50 seconds. Subsequent requests are fast.
 
-Changes re-count the active square instantly.
-
-## Known limitations
-Auto-counting is an estimate. Weak spots: clumped/touching cells, out-of-focus or
-color-shifted images, very high density (dilute further or draw a smaller box), and
-cell-sized round debris. Verify manually when precision is critical. These are inherent
-limits of the classical detector — see "Labeling" for the path to a learned model.
-
-## Labeling (collecting training data for a future ML model)
-The classical detector struggles with touching cells and grid lines. The planned fix is a
-small machine-learning model trained on your own labeled images. To collect labels:
-
-1. Run CellCount **locally** (`start.bat` or `uvicorn app.main:app`) — labels save to a
-   local `labels/` folder. (On the hosted free tier the disk is wiped on restart, so the
-   Label screen is disabled there.)
-2. Upload an image, draw the box, run analysis, then click **"Label this image →"** on the
-   results screen.
-3. The detector's guesses appear as muted dots. **Tap** an empty spot to add a missed cell,
-   **tap** a dot to remove a wrong one, **drag** to reposition; Undo is Ctrl/Cmd-Z. Save.
-4. When you've labeled a batch (~30–50 images), click **"Download training set (.zip)"** —
-   it bundles every image + a `manifest.json` with pixel-coordinate points, ready to train a
-   density-map counter on Google Colab.
-
-`labels/` is gitignored (your lab photos stay local).
+---
 
 ## Tests
+
 ```bash
 .venv\Scripts\python.exe tests\test_detection.py
-# or, if pytest is installed:  .venv\Scripts\python.exe -m pytest tests -q
 ```
-`tests/calibrate.py` and `tests/tune.py` run detection over images in `samples/` and write
-overlay PNGs for visual inspection. **Note:** `samples/` is not included in this repo (lab
-images are kept private) — add your own hemocytometer images to that folder to use these
-calibration scripts. The unit test (`test_detection.py`) uses synthetic images and needs no
-samples.
+Uses synthetic images, so it needs no sample data. `tests/calibrate.py` and `tests/tune.py` run
+detection over images in `samples/` and write overlay PNGs for visual inspection — add your own
+images there (`samples/` is gitignored; lab photos stay local).
+
+---
 
 ## Project layout
+
 ```
 app/            FastAPI backend + OpenCV pipeline
-  detection.py  the cell-detection pipeline (detect_cells)
-  params.py     default slider params + clamping
+  detection.py  the detection pipeline (detect_cells, detect_box)
+  params.py     detection defaults + clamping
   schemas.py    request/response models
-  main.py       /detect and /health endpoints
-frontend/       React + Vite + Tailwind UI
-samples/        local hemocytometer images (not committed — add your own)
-tests/          detection smoke tests + calibration scripts
+  main.py       /detect, /detect-box, /health, and serves the UI
+frontend/       React + Vite + Tailwind UI (dist/ is committed)
+  src/report.js PDF report (generated in the browser)
+ml/             paused density-map experiment (training + honest evaluation)
+tests/          detection tests + calibration scripts
+render.yaml     single-service deploy config
 ```
+
+## Notes
+- Images are processed per request and never stored on the server.
+- Reloading the page keeps your counts and calculations; the photos themselves aren't retained.

@@ -1,27 +1,47 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import UploadScreen from "./components/UploadScreen.jsx";
 import ProcessingScreen from "./components/ProcessingScreen.jsx";
 import ResultsScreen from "./components/ResultsScreen.jsx";
 import { detect, defaultParams } from "./api.js";
+import { saveSession, loadSession, clearSession } from "./session.js";
 
 const EMPTY_SQUARE = () => ({
   file: null,
   url: null,
   box: null, // {x0,y0,x1,y1} normalized
+  photoMissing: false, // true when restored from a reload (image not retained)
 });
 
+// Restore a previous session once, at module init, so a reload lands the user
+// back on their results instead of an empty upload screen.
+const restored = loadSession();
+
 export default function App() {
-  const [screen, setScreen] = useState("upload"); // upload | processing | results
-  const [squares, setSquares] = useState([
-    EMPTY_SQUARE(),
-    EMPTY_SQUARE(),
-    EMPTY_SQUARE(),
-    EMPTY_SQUARE(),
-  ]);
-  const [dilution, setDilution] = useState("");
-  const [params, setParams] = useState(defaultParams());
-  const [results, setResults] = useState([null, null, null, null]);
-  const [errors, setErrors] = useState([null, null, null, null]);
+  const [screen, setScreen] = useState(restored?.screen || "upload");
+  const [squares, setSquares] = useState(() =>
+    restored
+      ? restored.boxes.map((box) => ({
+          ...EMPTY_SQUARE(),
+          box,
+          photoMissing: true, // photos aren't persisted (too large for storage)
+        }))
+      : [EMPTY_SQUARE(), EMPTY_SQUARE(), EMPTY_SQUARE(), EMPTY_SQUARE()]
+  );
+  const [dilution, setDilution] = useState(restored?.dilution ?? "");
+  const [params, setParams] = useState(restored?.params || defaultParams());
+  const [results, setResults] = useState(
+    restored?.results || [null, null, null, null]
+  );
+  const [errors, setErrors] = useState(
+    restored?.errors || [null, null, null, null]
+  );
+
+  // Persist a compact snapshot whenever the meaningful state changes.
+  useEffect(() => {
+    if (screen === "results") {
+      saveSession({ screen, dilution, params, results, errors, squares });
+    }
+  }, [screen, dilution, params, results, errors, squares]);
 
   async function runAnalysis() {
     setScreen("processing");
@@ -73,6 +93,7 @@ export default function App() {
   }
 
   function reset() {
+    clearSession();
     squares.forEach((s) => s.url && URL.revokeObjectURL(s.url));
     setSquares([EMPTY_SQUARE(), EMPTY_SQUARE(), EMPTY_SQUARE(), EMPTY_SQUARE()]);
     setDilution("");
