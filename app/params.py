@@ -14,6 +14,11 @@ from __future__ import annotations
 
 # name -> (default, min, max). Values are clamped to [min, max].
 _SPEC: dict[str, tuple[float, float, float]] = {
+    # --- working resolution ---
+    # The crop is downscaled to this width before detection so results don't
+    # depend on the uploaded photo's resolution (all tuning below is in pixels).
+    # A correctness constant, not a user preference — not exposed as a slider.
+    "detect_width": (900, 200, 4000),
     # --- bright (live) cell detection via top-hat ---
     # Top-hat structuring-element diameter: must be a bit larger than a cell so the
     # cell survives the transform but the slowly-varying background is removed.

@@ -24,6 +24,26 @@ from .schemas import Box, BoxDetectResponse, DetectResponse
 
 app = FastAPI(title="CellCount", version="1.0.0")
 
+# Reject absurdly large uploads before they can exhaust memory on a small
+# instance. Normal phone photos are ~2-12MB, so 25MB is generous.
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+
+def _read_image(image_bytes: bytes) -> bytes:
+    """Shared upload validation for the detection endpoints."""
+    if not image_bytes:
+        raise HTTPException(status_code=422, detail="empty image upload")
+    if len(image_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"image is too large "
+                f"({len(image_bytes) / 1048576:.1f}MB, limit "
+                f"{MAX_UPLOAD_BYTES // 1048576}MB)"
+            ),
+        )
+    return image_bytes
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -59,10 +79,8 @@ async def detect(
     except json.JSONDecodeError:
         params_obj = {}
 
-    # --- read image bytes ---
-    image_bytes = await image.read()
-    if not image_bytes:
-        raise HTTPException(status_code=422, detail="empty image upload")
+    # --- read + validate image bytes ---
+    image_bytes = _read_image(await image.read())
 
     # --- run detection ---
     try:
@@ -82,9 +100,7 @@ async def detect_box_endpoint(image: UploadFile = File(...)) -> BoxDetectRespons
     Returns a box + confidence when it finds a plausible square; otherwise
     box=None so the UI falls back to manual drawing. One-time, upload-time call.
     """
-    image_bytes = await image.read()
-    if not image_bytes:
-        raise HTTPException(status_code=422, detail="empty image upload")
+    image_bytes = _read_image(await image.read())
     try:
         result = detect_box(image_bytes, None)
     except DetectionError as exc:

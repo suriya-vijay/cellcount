@@ -43,6 +43,13 @@ def detect_cells(image_bytes: bytes, box: dict, raw_params: dict | None) -> dict
     img = _decode(image_bytes)
     ih, iw = img.shape[:2]
     crop, (x0px, y0px) = _crop(img, box, iw, ih)
+
+    # Normalize the working resolution BEFORE detection. Every tuning parameter
+    # below (radii, kernel sizes, sigmas) is expressed in PIXELS, so without this
+    # the same field shot at phone resolution counts 2-4x more "cells" than the
+    # same field at a smaller size. Downscale only (never upscale — that adds no
+    # information); `scale` maps coordinates back to the original image.
+    crop, scale = _normalize_scale(crop, int(params["detect_width"]))
     ch, cw = crop.shape[:2]
 
     gray = _preprocess(crop, params)
@@ -76,11 +83,13 @@ def detect_cells(image_bytes: bytes, box: dict, raw_params: dict | None) -> dict
     # De-duplicate overlapping detections (dead has priority since it's listed first).
     kept = _dedupe(candidates)
 
+    # Divide by `scale` to undo the working-resolution downscale, so markers land
+    # correctly on the ORIGINAL image regardless of the uploaded photo's size.
     cells = [
         {
-            "x": (x0px + k["cx"]) / iw,
-            "y": (y0px + k["cy"]) / ih,
-            "radius": k["radius_px"] / iw,
+            "x": (x0px + k["cx"] / scale) / iw,
+            "y": (y0px + k["cy"] / scale) / ih,
+            "radius": (k["radius_px"] / scale) / iw,
             "type": k["type"],
         }
         for k in kept
@@ -122,6 +131,24 @@ def _crop(img: np.ndarray, box: dict, iw: int, ih: int):
     if x1 - x0 < 2 or y1 - y0 < 2:
         raise DetectionError("box is too small after clamping to the image")
     return img[y0:y1, x0:x1].copy(), (x0, y0)
+
+
+def _normalize_scale(crop: np.ndarray, target_w: int) -> tuple[np.ndarray, float]:
+    """Downscale the crop to a consistent working width; return (crop, scale).
+
+    Detection is tuned in pixels, so it is only valid at a known scale. Returns
+    scale == 1.0 (and the crop untouched) when it's already at or below the
+    target — upscaling would invent no new detail and would change results for
+    images that already worked.
+    """
+    h, w = crop.shape[:2]
+    if w <= target_w:
+        return crop, 1.0
+    scale = target_w / w
+    resized = cv2.resize(
+        crop, (target_w, max(1, int(round(h * scale)))), interpolation=cv2.INTER_AREA
+    )
+    return resized, scale
 
 
 # --------------------------------------------------------------------------- #
