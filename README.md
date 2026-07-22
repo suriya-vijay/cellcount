@@ -3,9 +3,16 @@
 **Live app → https://cellcount-ecig.onrender.com** — deployed and ready to use, on desktop or
 phone. No install, no account.
 
-Automated hemocytometer cell counting for the lab. Add one microscope photo per counting square,
-drag a box over the square you want counted, and CellCount finds the cells (live vs. dead via
-trypan blue), computes the cell density, and gives you a PDF report.
+Automates hemocytometer cell counting for cell-culture labs. Photograph four counting squares
+through a microscope, mark the counting region, and CellCount detects the cells, classifies live
+vs. dead (trypan blue), and computes cell density using the standard formula — plus an M1V1=M2V2
+calculator for seeding to a target density and a downloadable PDF report.
+
+Detection is a **classical OpenCV pipeline** (illumination normalization, top-hat isolation, Otsu
+thresholding, morphological and shape-based filtering), validated at **89% count accuracy
+(F1 0.81)** against hand-labeled ground truth. A density-map CNN was trained and evaluated
+head-to-head and scored 59%, so the deterministic pipeline shipped. React/Vite + FastAPI, deployed
+as a single service.
 
 ### Measured accuracy
 
@@ -29,6 +36,9 @@ That number is measured, not claimed. See [Accuracy & the ML experiment](#accura
 
 > **First load may take ~50 seconds.** The free hosting tier sleeps after inactivity and has to
 > wake up. Every request after that is fast.
+
+Any photo size works — images are normalized to a consistent internal working resolution before
+detection, so counts don't change with your camera's megapixels. Uploads are capped at 25MB.
 
 ### Counting rules
 - Only cells **inside the box you drew** are counted.
