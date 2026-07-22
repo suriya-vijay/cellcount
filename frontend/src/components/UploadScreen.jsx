@@ -1,6 +1,8 @@
+import { useRef } from "react";
+import AppHeader from "./AppHeader.jsx";
 import BoxDrawer from "./BoxDrawer.jsx";
-import { MicroscopeIcon } from "./icons.jsx";
-import { detectBox } from "../api.js";
+import { Button, Card, Field, inputClass } from "./ui.jsx";
+import { CameraIcon, CheckIcon, UploadIcon } from "./icons.jsx";
 
 const ACCEPT = ".jpg,.jpeg,.png,.tiff,.tif";
 
@@ -19,141 +21,154 @@ export default function UploadScreen({
     });
   }
 
-  async function onPick(i, file) {
+  function onPick(i, file) {
     if (!file) return;
     const prev = squares[i];
     if (prev.url) URL.revokeObjectURL(prev.url);
-    setSquare(i, {
-      file,
-      url: URL.createObjectURL(file),
-      box: null,
-      boxSource: "detecting",
-    });
-
-    // Try to auto-suggest the counting box. On success the box pre-fills and the
-    // user can drag to adjust; on low confidence it stays null → manual draw.
-    try {
-      const { box, confidence, source } = await detectBox(file);
-      if (source === "auto" && box) {
-        setSquare(i, { box, boxSource: confidence >= 0.6 ? "auto" : "auto-verify" });
-      } else {
-        setSquare(i, { boxSource: "manual" });
-      }
-    } catch {
-      setSquare(i, { boxSource: "manual" });
-    }
+    setSquare(i, { file, url: URL.createObjectURL(file), box: null });
   }
 
-  const allReady =
-    squares.every((s) => s.file && s.box) &&
-    dilution !== "" &&
-    Number(dilution) > 0;
+  const ready = squares.filter((s) => s.file && s.box).length;
+  const allReady = ready === 4 && dilution !== "" && Number(dilution) > 0;
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
-      <header className="flex items-center gap-3 mb-2">
-        <MicroscopeIcon className="w-8 h-8 text-teal-600" />
-        <h1 className="text-3xl font-bold tracking-tight">CellCount</h1>
-      </header>
-      <p className="text-slate-500 mb-6">
-        Automated hemocytometer cell counting for your lab.
-      </p>
+    <div className="min-h-full bg-background">
+      <AppHeader />
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
+            New count
+          </h2>
+          <p className="mt-1 text-sm text-muted-fg">
+            Add one photo per counting square, then drag a box over the square you
+            want counted.
+          </p>
+        </div>
 
-      <div className="rounded-lg bg-sky-50 border border-sky-100 text-sky-900 text-sm p-4 mb-8">
-        Upload one image per counting square. After each upload,{" "}
-        <strong>drag a box over one counting square</strong> (draw it on the gridlines).
-        Live cells appear as bright dots; dead cells (if any) appear dark blue. Cells on
-        the top/left edge are counted; bottom/right edge cells are excluded.
-      </div>
+        <ol className="mb-6 grid gap-2 rounded-xl border border-border bg-surface p-4 text-sm text-muted-fg sm:grid-cols-3">
+          <li>
+            <span className="font-medium text-foreground">1.</span> Add 4 photos
+          </li>
+          <li>
+            <span className="font-medium text-foreground">2.</span> Drag a box on each
+          </li>
+          <li>
+            <span className="font-medium text-foreground">3.</span> Enter dilution &amp; analyze
+          </li>
+        </ol>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        {squares.map((sq, i) => (
-          <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-semibold">Square {i + 1}</span>
-              {sq.boxSource === "detecting" ? (
-                <span className="text-xs text-slate-400 font-medium">
-                  detecting box…
-                </span>
-              ) : sq.box ? (
-                <span
-                  className={`text-xs font-medium ${
-                    sq.boxSource === "auto-verify"
-                      ? "text-amber-600"
-                      : "text-teal-700"
-                  }`}
-                >
-                  {sq.boxSource === "auto"
-                    ? "✓ auto box — drag to adjust"
-                    : sq.boxSource === "auto-verify"
-                    ? "auto box — please verify"
-                    : "✓ box drawn"}
-                </span>
-              ) : sq.file ? (
-                <span className="text-xs text-amber-600 font-medium">
-                  draw a box ↓
-                </span>
-              ) : null}
-            </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {squares.map((sq, i) => (
+            <SquareCard
+              key={i}
+              index={i}
+              square={sq}
+              onPick={(f) => onPick(i, f)}
+              onBox={(box) => setSquare(i, { box })}
+              onClear={() => {
+                if (sq.url) URL.revokeObjectURL(sq.url);
+                setSquare(i, { file: null, url: null, box: null });
+              }}
+            />
+          ))}
+        </div>
 
-            {!sq.file ? (
-              <label className="flex flex-col items-center justify-center h-40 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-teal-500 hover:bg-teal-50/40 transition">
-                <span className="text-slate-400 text-sm">
-                  Click or drag image here
-                </span>
-                <input
-                  type="file"
-                  accept={ACCEPT}
-                  className="hidden"
-                  onChange={(e) => onPick(i, e.target.files?.[0])}
-                />
-              </label>
-            ) : (
-              <div>
-                <BoxDrawer
-                  url={sq.url}
-                  box={sq.box}
-                  onChange={(box) => setSquare(i, { box, boxSource: "manual" })}
-                />
-                <button
-                  className="mt-2 text-xs text-slate-500 hover:text-teal-700 underline"
-                  onClick={() => {
-                    if (sq.url) URL.revokeObjectURL(sq.url);
-                    setSquare(i, { file: null, url: null, box: null });
-                  }}
-                >
-                  Replace image
-                </button>
-              </div>
-            )}
+        <Card className="mt-6 p-4 sm:p-5">
+          <div className="max-w-sm">
+            <Field
+              label="Dilution factor"
+              hint="Numeric factor only — for a 1:2 dilution (equal parts sample and trypan blue), enter 2."
+            >
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                value={dilution}
+                onChange={(e) => setDilution(e.target.value)}
+                placeholder="e.g. 2"
+                className={inputClass}
+              />
+            </Field>
           </div>
-        ))}
-      </div>
+        </Card>
 
-      <div className="mt-8 max-w-sm">
-        <label className="block font-medium mb-1">Dilution Factor</label>
-        <input
-          type="number"
-          min="0"
-          step="any"
-          value={dilution}
-          onChange={(e) => setDilution(e.target.value)}
-          placeholder="e.g. 2"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none"
-        />
-        <p className="text-xs text-slate-500 mt-1">
-          Enter the numeric factor only. For a 1:2 dilution (equal parts sample and
-          trypan blue), enter 2.
-        </p>
-      </div>
-
-      <button
-        disabled={!allReady}
-        onClick={onAnalyze}
-        className="mt-8 w-full rounded-lg bg-teal-600 text-white font-semibold py-3 hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
-      >
-        Analyze Cells →
-      </button>
+        <div className="sticky bottom-0 mt-6 -mx-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+          <Button
+            onClick={onAnalyze}
+            disabled={!allReady}
+            className="w-full sm:w-auto sm:px-8"
+          >
+            Analyze cells
+          </Button>
+          <p className="mt-2 text-center text-xs text-muted-fg sm:text-left">
+            {ready}/4 squares ready
+            {ready === 4 && (!dilution || Number(dilution) <= 0)
+              ? " — enter a dilution factor"
+              : ""}
+          </p>
+        </div>
+      </main>
     </div>
+  );
+}
+
+function SquareCard({ index, square, onPick, onBox, onClear }) {
+  const fileRef = useRef(null);
+  const camRef = useRef(null);
+  const done = Boolean(square.box);
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+        <span className="font-medium">Square {index + 1}</span>
+        {done ? (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-accent">
+            <CheckIcon className="h-4 w-4" /> Box set
+          </span>
+        ) : square.file ? (
+          <span className="text-xs font-medium text-warning">Drag a box below</span>
+        ) : null}
+      </div>
+
+      {!square.file ? (
+        <div className="grid grid-cols-2 gap-2 p-4">
+          <input
+            ref={fileRef}
+            type="file"
+            accept={ACCEPT}
+            className="hidden"
+            onChange={(e) => onPick(e.target.files?.[0])}
+          />
+          {/* capture="environment" makes phones open the rear camera directly */}
+          <input
+            ref={camRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => onPick(e.target.files?.[0])}
+          />
+          <Button variant="secondary" onClick={() => fileRef.current?.click()}>
+            <UploadIcon className="h-4 w-4" /> Choose
+          </Button>
+          <Button variant="secondary" onClick={() => camRef.current?.click()}>
+            <CameraIcon className="h-4 w-4" /> Camera
+          </Button>
+        </div>
+      ) : (
+        <div className="p-3">
+          <BoxDrawer url={square.url} box={square.box} onChange={onBox} />
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-fg">
+              Drag across one counting square.
+            </p>
+            <Button variant="ghost" onClick={onClear} className="px-3">
+              Replace
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }

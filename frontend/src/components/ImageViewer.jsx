@@ -28,7 +28,7 @@ export default function ImageViewer({ url, box, cells, showMarkers, busy }) {
 
     // counting box outline
     if (box) {
-      ctx.strokeStyle = "#0d9488";
+      ctx.strokeStyle = "#1E3A5F"; // --color-primary (canvas can't read CSS vars)
       ctx.lineWidth = 2;
       ctx.strokeRect(
         box.x0 * size.w,

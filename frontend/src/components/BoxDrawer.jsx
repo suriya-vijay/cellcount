@@ -48,7 +48,7 @@ export default function BoxDrawer({ url, box, onChange }) {
       <img src={url} alt="square" className="block w-full rounded-lg" draggable={false} />
       {shown && (
         <div
-          className="absolute border-2 border-teal-600 bg-teal-600/10 pointer-events-none rounded-sm"
+          className="absolute border-2 border-primary bg-primary/10 pointer-events-none rounded-sm"
           style={{
             left: `${shown.x0 * 100}%`,
             top: `${shown.y0 * 100}%`,

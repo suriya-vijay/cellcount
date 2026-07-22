@@ -1,9 +1,19 @@
+import AppHeader from "./AppHeader.jsx";
+
+// Single lightweight spinner (transform-only animation — no layout work).
 export default function ProcessingScreen() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-      <div className="w-12 h-12 rounded-full border-4 border-teal-600 border-t-transparent animate-spin" />
-      <h2 className="text-xl font-semibold">Analyzing your samples…</h2>
-      <p className="text-slate-500">Identifying cells within each counting square</p>
+    <div className="min-h-full bg-background">
+      <AppHeader />
+      <div className="flex flex-col items-center justify-center gap-4 px-6 py-24">
+        <div
+          className="h-9 w-9 animate-spin rounded-full border-[3px] border-border border-t-primary"
+          role="status"
+          aria-label="Analyzing"
+        />
+        <p className="font-medium">Analyzing squares…</p>
+        <p className="text-sm text-muted-fg">Detecting cells inside each box</p>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Semantic design tokens (Swiss/minimal lab-instrument system).
+   Components reference these via Tailwind names, never raw hex. */
+:root {
+  --color-primary: #1e3a5f; /* navy — primary actions, headings */
+  --color-primary-hover: #16304f;
+  --color-on-primary: #ffffff;
+  --color-accent: #059669; /* scientific green — success/live */
+  --color-danger: #dc2626; /* dead cells, errors */
+  --color-warning: #b45309;
+  --color-background: #f8fafc;
+  --color-surface: #ffffff;
+  --color-foreground: #0f172a;
+  --color-muted-fg: #64748b;
+  --color-border: #e4e7eb;
+}
+
 html,
 body,
 #root {
@@ -10,7 +26,38 @@ body,
 
 body {
   margin: 0;
-  background: #f8fafc;
-  font-family: "Inter", system-ui, sans-serif;
-  color: #0f172a;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: "Fira Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer utilities {
+  /* Monospaced, tabular figures for counts/densities so numbers don't jitter
+     as values update (each digit occupies the same width). */
+  .num {
+    font-family: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Prevent iOS from auto-zooming when focusing an input (needs >=16px). */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+/* Accessibility + performance: honor the OS "reduce motion" setting.
+   The UI only uses short micro-transitions, but they're disabled here. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

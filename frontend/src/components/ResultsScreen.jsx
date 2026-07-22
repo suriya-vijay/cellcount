@@ -1,9 +1,13 @@
 import { useState, useRef, useEffect } from "react";
+import AppHeader from "./AppHeader.jsx";
 import ImageViewer from "./ImageViewer.jsx";
 import SliderPanel from "./SliderPanel.jsx";
 import CountSummary from "./CountSummary.jsx";
 import DilutionCalculator from "./DilutionCalculator.jsx";
+import { Button, Card, Dot } from "./ui.jsx";
+import { DownloadIcon, RefreshIcon } from "./icons.jsx";
 import { summarize } from "../calc.js";
+import { downloadReport } from "../report.js";
 
 export default function ResultsScreen({
   squares,
@@ -18,14 +22,12 @@ export default function ResultsScreen({
   const [active, setActive] = useState(0);
   const [showMarkers, setShowMarkers] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [plan, setPlan] = useState(null);
   const debounceRef = useRef(null);
-  const seqRef = useRef(0); // request sequence; ignore stale completions
+  const seqRef = useRef(0);
 
   const summary = summarize(results, dilution);
 
-  // Debounced live re-run of the active square whenever params change. Tracks a
-  // busy flag for the "updating…" indicator; only the latest request clears it,
-  // so fast dragging doesn't flicker the indicator off prematurely.
   function changeParams(next) {
     setParams(next);
     clearTimeout(debounceRef.current);
@@ -46,97 +48,124 @@ export default function ResultsScreen({
   const res = results[active];
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Results</h1>
-        <button
-          onClick={onReset}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
-        >
-          Start New Count
-        </button>
-      </div>
+    <div className="min-h-full bg-background">
+      <AppHeader
+        right={
+          <Button variant="secondary" onClick={onReset} className="px-3">
+            <RefreshIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">New count</span>
+          </Button>
+        }
+      />
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-5 border-b border-slate-200">
-        {squares.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => setActive(i)}
-            className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition ${
-              active === i
-                ? "border-teal-600 text-teal-700"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        {/* Square tabs — horizontally scrollable so they never overflow on mobile */}
+        <div className="-mx-4 mb-5 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <div
+            className="flex gap-2 border-b border-border"
+            role="tablist"
+            aria-label="Counting squares"
           >
-            Square {i + 1}
-            {errors[i] && <span className="text-red-500"> ⚠</span>}
-          </button>
-        ))}
-      </div>
+            {squares.map((_, i) => (
+              <button
+                key={i}
+                role="tab"
+                aria-selected={active === i}
+                onClick={() => setActive(i)}
+                className={`-mb-px min-h-[44px] shrink-0 border-b-2 px-4 text-sm font-medium transition-colors duration-150 ${
+                  active === i
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-fg hover:text-foreground"
+                }`}
+              >
+                Square {i + 1}
+                {errors[i] && <span className="ml-1 text-danger">!</span>}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* LEFT: image + overlay + sliders */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 text-sm text-slate-500">
-              <span>🟢 Live&nbsp;&nbsp;🔴 Dead</span>
-              {res && (
-                <span className="font-medium text-slate-700 tabular-nums">
-                  {res.total_count} cells
-                </span>
-              )}
-              {busy && (
-                <span className="flex items-center gap-1 text-teal-600">
-                  <span className="w-3 h-3 rounded-full border-2 border-teal-600 border-t-transparent animate-spin" />
-                  updating…
-                </span>
-              )}
-            </div>
-            <button
-              onClick={() => setShowMarkers((v) => !v)}
-              className="text-sm rounded-lg border border-slate-300 px-3 py-1 hover:bg-slate-50"
-            >
-              {showMarkers ? "Hide Markers" : "Show Markers"}
-            </button>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {/* LEFT — image + detection controls */}
+          <div className="space-y-4">
+            <Card className="overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5 text-sm">
+                <div className="flex items-center gap-3 text-muted-fg">
+                  <Dot tone="accent" label="Live" />
+                  <Dot tone="danger" label="Dead" />
+                  {res && (
+                    <span className="num font-medium text-foreground">
+                      {res.total_count} cells
+                    </span>
+                  )}
+                  {busy && (
+                    <span className="text-primary" aria-live="polite">
+                      updating…
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowMarkers((v) => !v)}
+                  className="px-3"
+                >
+                  {showMarkers ? "Hide markers" : "Show markers"}
+                </Button>
+              </div>
+
+              <div className="p-3">
+                {sq?.url ? (
+                  <ImageViewer
+                    url={sq.url}
+                    box={sq.box}
+                    cells={res?.cells || []}
+                    showMarkers={showMarkers}
+                    busy={busy}
+                  />
+                ) : (
+                  <p className="p-6 text-center text-sm text-muted-fg">
+                    No image for this square.
+                  </p>
+                )}
+                {errors[active] && (
+                  <p className="mt-3 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+                    {errors[active]}
+                  </p>
+                )}
+              </div>
+            </Card>
+
+            <SliderPanel
+              params={params}
+              onChange={changeParams}
+              brightUsed={res?.bright_used}
+            />
+
+            <p className="text-xs leading-relaxed text-muted-fg">
+              Automated counts are estimates (~89% measured accuracy). Verify manually
+              when precision is critical.
+            </p>
           </div>
 
-          {sq?.url ? (
-            <ImageViewer
-              url={sq.url}
-              box={sq.box}
-              cells={res?.cells || []}
-              showMarkers={showMarkers}
-              busy={busy}
+          {/* RIGHT — numbers */}
+          <div className="space-y-5">
+            <CountSummary results={results} errors={errors} dilution={dilution} />
+
+            <Button
+              variant="secondary"
+              onClick={() => downloadReport({ results, dilution, target: plan })}
+              className="w-full"
+            >
+              <DownloadIcon className="h-4 w-4" /> Download PDF report
+            </Button>
+
+            <DilutionCalculator
+              currentDensity={summary.densityMillions}
+              onPlan={setPlan}
             />
-          ) : (
-            <div className="text-slate-400">No image for this square.</div>
-          )}
-
-          {errors[active] && (
-            <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm p-3">
-              {errors[active]}
-            </div>
-          )}
-
-          <p className="text-xs text-slate-400">
-            Auto markers are estimates. Verify manually if precision is critical.
-            Artifacts, debris, and shadows may be miscounted — tune the settings below.
-          </p>
-
-          <SliderPanel
-            params={params}
-            onChange={changeParams}
-            brightUsed={res?.bright_used}
-          />
+          </div>
         </div>
-
-        {/* RIGHT: counts + dilution calc */}
-        <div className="space-y-6">
-          <CountSummary results={results} errors={errors} dilution={dilution} />
-          <DilutionCalculator currentDensity={summary.densityMillions} />
-        </div>
-      </div>
+      </main>
     </div>
   );
 }
