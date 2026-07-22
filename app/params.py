@@ -18,7 +18,13 @@ _SPEC: dict[str, tuple[float, float, float]] = {
     # The crop is downscaled to this width before detection so results don't
     # depend on the uploaded photo's resolution (all tuning below is in pixels).
     # A correctness constant, not a user preference — not exposed as a slider.
-    "detect_width": (900, 200, 4000),
+    #
+    # DO NOT RAISE THIS. 316px is the crop width every parameter below was tuned
+    # against (the labeled 491x873 reference images produce ~316px crops). Setting
+    # it higher makes cells appear larger than the filters expect and the pipeline
+    # over-segments: measured against hand-labeled ground truth on phone-resolution
+    # photos, 316 -> 92.8% count accuracy, 400 -> 83.7%, 700 -> 50.0%, 900 -> 1.5%.
+    "detect_width": (316, 200, 4000),
     # --- bright (live) cell detection via top-hat ---
     # Top-hat structuring-element diameter: must be a bit larger than a cell so the
     # cell survives the transform but the slowly-varying background is removed.
