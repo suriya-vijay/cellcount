@@ -1,13 +1,18 @@
 # CellCount
 
-Automated hemocytometer cell counting for the lab. Upload one microscope image per
-counting square, draw a box around the counting grid, and CellCount counts the cells
-(live vs. dead via trypan blue) and computes the cell density.
+Automated hemocytometer cell counting for the lab. Add one microscope photo per counting
+square, drag a box over the square, and CellCount counts the cells (live vs. dead via
+trypan blue) and computes the cell density. Works on desktop and on a phone browser.
 
-**The counting engine is classical OpenCV — not an AI/LLM.** This is deliberate: vision
-LLMs are unreliable at counting many small repeated objects, which is unacceptable for a
-measurement that feeds experimental calculations. OpenCV is deterministic, runs offline,
-and is tunable to your microscope via live sliders.
+**Measured accuracy: ~89% count accuracy (F1 0.81)** on held-out test images scored
+against hand-labeled ground truth. Counts are estimates — verify manually when precision
+is critical.
+
+**The counting engine is classical OpenCV — not an AI/LLM.** This is deliberate and
+measured: a density-map neural network was trained on hand-labeled images and scored
+**59% vs. the classical pipeline's 89%** on the same held-out images (too little training
+data). The classical pipeline is deterministic, runs offline, and needs no GPU. The ML
+experiment is kept in `ml/` for a future revisit with a larger dataset.
 
 ## How it works
 
@@ -68,14 +73,29 @@ npm run dev                               # http://localhost:5173
 Open http://localhost:5173. (In single-server mode the UI calls the same origin, so no
 `.env` is needed.)
 
-## Deploy (single service)
-Because FastAPI serves the UI, the app deploys as **one** web service. A ready-made
-`render.yaml` is included for [Render](https://render.com):
-- Build: `pip install -r requirements.txt && cd frontend && npm install && npm run build`
-- Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+## Use it on your phone
+The UI is mobile-first: open the deployed URL in your phone browser, tap **Camera** (or
+**Choose**) for each of the 4 squares, drag a box with your finger over the counting
+square, enter the dilution factor, and tap **Analyze cells**. Tap **Download PDF report**
+to save the results.
 
-Connect the GitHub repo in Render (or use Blueprints to pick up `render.yaml`). The same
-build/start commands work on Railway or Fly.io.
+## Deploy (free, single service)
+FastAPI serves the UI, so the whole app is **one** web service — no separate frontend
+host needed (Vercel can't run the Python/OpenCV backend, so don't split it).
+
+`frontend/dist` is **committed**, so the server needs Python only:
+
+1. Push the repo to GitHub.
+2. On [Render](https://render.com): **New → Blueprint** → select this repo. It reads
+   `render.yaml` (build `pip install -r requirements.txt`, start
+   `uvicorn app.main:app --host 0.0.0.0 --port $PORT`).
+3. Open the resulting URL on any device.
+
+After changing frontend code: `cd frontend && npm run build`, then commit `dist/`.
+
+> **Free-tier caveat:** Render free services sleep after ~15 minutes idle, so the first
+> request after a quiet period takes ~30–60 seconds to wake up. Subsequent requests are
+> fast. The same setup works on Railway or Fly.io.
 
 ## Tuning to your microscope
 The default detection parameters were calibrated on phone-through-eyepiece brightfield
